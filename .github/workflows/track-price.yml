@@ -1,0 +1,45 @@
+name: Track Prices
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+  PRODUCTS_JSON: ${{ secrets.PRODUCTS_JSON }}
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore price history from cache
+        id: history-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: '*.csv'
+          key: price-history-${{ github.run_id }}
+          restore-keys: |
+            price-history-
+
+      - name: Install Python deps
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Record prices & stock
+        id: price
+        run: python3 price_tracker.py
+
+      - name: Save price history to cache
+        uses: actions/cache/save@v4
+        with:
+          path: '*.csv'
+          key: price-history-${{ github.run_id }}

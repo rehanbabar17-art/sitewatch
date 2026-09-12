@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+products.json
+*_history.csv

@@ -1,0 +1,15 @@
+[
+  {
+    "name": "Example Shopify Product",
+    "url": "https://shop.example.com/products/example-product",
+    "history_file": "example_shopify_history.csv",
+    "baseline_price": 2500,
+    "shopify": true
+  },
+  {
+    "name": "Example Store Product",
+    "url": "https://shop.example-2.com/products/example-product",
+    "history_file": "example_store_history.csv",
+    "baseline_price": 1000
+  }
+]
