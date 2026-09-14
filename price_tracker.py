@@ -248,11 +248,13 @@ async def main():
                 continue
 
             price = data["price"]
+            compare_at = data.get("compare_at_price")
             in_stock = data["in_stock"]
             valid = data["valid"]
             stock_label = {1: "In stock", 0: "Out of stock", -1: "Unknown"}[in_stock]
+            mrp_str = f" · MRP Rs. {compare_at:,}" if compare_at else ""
             print(f"  • {product['name']}: "
-                  f"{fmt_price(price)} · {stock_label}")
+                  f"{fmt_price(price)}{mrp_str} · {stock_label}")
 
             history = load_history(product["history_file"])
             last_reliable = None
@@ -290,9 +292,10 @@ async def main():
                 direction = "dropped" if price < last_price else "increased"
                 events.append(f"Price {direction}: Rs. {last_price:,} to Rs. {price:,}")
                 event += "price_change;"
+                mrp_line = f"\nMRP: Rs. {compare_at:,}" if compare_at else ""
                 notify(
                     f"Sitewatch: Price change - {product['name']}",
-                    f"{product['name']}\nRs. {last_price:,} -> Rs. {price:,}",
+                    f"{product['name']}\nRs. {last_price:,} -> Rs. {price:,}{mrp_line}",
                     "pricechart,warning",
                 )
 
@@ -322,9 +325,10 @@ async def main():
                 if price < seen_min:
                     events.append(f"ALL-TIME LOW: Rs. {price:,} (prev low Rs. {seen_min:,})")
                     event += "all_time_low;"
+                    mrp_line = f"\nMRP: Rs. {compare_at:,}" if compare_at else ""
                     notify(
                         f"Sitewatch: ALL-TIME LOW - {product['name']}",
-                        f"{product['name']}\nNew lowest price: Rs. {price:,}\nPrevious low: Rs. {seen_min:,}",
+                        f"{product['name']}\nNew lowest price: Rs. {price:,}\nPrevious low: Rs. {seen_min:,}{mrp_line}",
                         "chart_with_downwards_trend,partying_face",
                     )
 
@@ -340,12 +344,16 @@ async def main():
             })
             save_history(product["history_file"], history)
 
+            mrp_str = f"Rs. {compare_at:,} → " if compare_at else ""
             summary_lines.append(
-                f"- **{product['name']}**: {fmt_price(price)} · "
+                f"- **{product['name']}**: {mrp_str}{fmt_price(price)} · "
                 f"{'In stock' if in_stock else 'Out of stock'} — {status}"
             )
             output_lines.append(
                 f"product{index}_price={price if price is not None else ''}"
+            )
+            output_lines.append(
+                f"product{index}_compare_at={compare_at if compare_at else ''}"
             )
             output_lines.append(
                 f"product{index}_stock={'in' if in_stock else 'out'}"
