@@ -20,7 +20,22 @@ NTFY_TOPIC = os.getenv("NTFY_TOPIC", "")
 # a discounted-off amount or delivery charge instead of the selling price.
 PROMO_KEYWORDS = r"(?:off|voucher|discount|deal|promo|save|min\.?\s*spend|delivery|shipping|cashback|coupon|banks|free|%|off flat|extra)"
 
-PRODUCTS = _json.loads(os.getenv("PRODUCTS_JSON", "[]"))
+# Load products from cached products.json first; fallback to PRODUCTS_JSON if bootstrapping
+PRODUCTS = []
+if os.path.exists("products.json"):
+    try:
+        with open("products.json", "r", encoding="utf-8") as f:
+            PRODUCTS = _json.load(f)
+    except Exception as e:
+        print(f"  ⚠ Failed to read cached products.json: {e}")
+
+if not PRODUCTS and os.getenv("PRODUCTS_JSON"):
+    try:
+        PRODUCTS = _json.loads(os.getenv("PRODUCTS_JSON", "[]"))
+        with open("products.json", "w", encoding="utf-8") as f:
+            _json.dump(PRODUCTS, f, indent=2)
+    except Exception as e:
+        print(f"  ⚠ Failed to parse PRODUCTS_JSON: {e}")
 
 
 
