@@ -205,7 +205,7 @@ def notify(title: str, message: str, tags: str):
             },
         )
         resp = conn.getresponse()
-        print(f"  🔔 ntfy sent ({resp.status}): {title}")
+        print(f"  🔔 ntfy alert dispatched ({resp.status})")
     except Exception as e:
         print(f"  ⚠ ntfy failed: {e}")
     finally:
@@ -243,8 +243,8 @@ async def main():
                 else:
                     data = await fetch_product(page, product)
             except Exception as e:
-                print(f"  ❌ {product['name']}: fetch failed ({e})")
-                summary_lines.append(f"- ⚠️ **{product['name']}** — fetch failed")
+                print(f"  ❌ Item #{index}: fetch failed ({e})")
+                summary_lines.append(f"- ⚠️ **Item #{index}** — fetch failed")
                 continue
 
             price = data["price"]
@@ -253,8 +253,7 @@ async def main():
             valid = data["valid"]
             stock_label = {1: "In stock", 0: "Out of stock", -1: "Unknown"}[in_stock]
             mrp_str = f" · MRP Rs. {compare_at:,}" if compare_at else ""
-            print(f"  • {product['name']}: "
-                  f"{fmt_price(price)}{mrp_str} · {stock_label}")
+            print(f"  • Item #{index}: Checked · {stock_label}")
 
             history = load_history(product["history_file"])
             last_reliable = None
@@ -278,8 +277,7 @@ async def main():
                 })
                 save_history(product["history_file"], history)
                 summary_lines.append(
-                    f"- ⚠️ **{product['name']}** — unreliable read (page did not render); "
-                    f"no alert fired."
+                    f"- ⚠️ **Item #{index}** — unreliable read; no alert fired."
                 )
                 output_lines.append(f"product{index}_price=")
                 output_lines.append(f"product{index}_stock=unknown")
@@ -346,8 +344,7 @@ async def main():
 
             mrp_str = f"Rs. {compare_at:,} → " if compare_at else ""
             summary_lines.append(
-                f"- **{product['name']}**: {mrp_str}{fmt_price(price)} · "
-                f"{'In stock' if in_stock else 'Out of stock'} — {status}"
+                f"- **Item #{index}**: {'In stock' if in_stock else 'Out of stock'} — {status}"
             )
             output_lines.append(
                 f"product{index}_price={price if price is not None else ''}"
