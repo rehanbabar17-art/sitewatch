@@ -20,13 +20,16 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Restore price history from cache
+      - name: Restore price history and products from cache
         id: history-restore
         uses: actions/cache/restore@v4
         with:
-          path: '*.csv'
-          key: price-history-${{ github.run_id }}
+          path: |
+            *.csv
+            products.json
+          key: sitewatch-data-${{ github.run_id }}
           restore-keys: |
+            sitewatch-data-
             price-history-
 
       - name: Install Python deps
@@ -38,8 +41,11 @@ jobs:
         id: price
         run: python3 price_tracker.py
 
-      - name: Save price history to cache
+      - name: Save price history and products to cache
         uses: actions/cache/save@v4
+        if: always()
         with:
-          path: '*.csv'
-          key: price-history-${{ github.run_id }}
+          path: |
+            *.csv
+            products.json
+          key: sitewatch-data-${{ github.run_id }}
