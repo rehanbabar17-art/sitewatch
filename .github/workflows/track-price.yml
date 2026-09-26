@@ -2,12 +2,18 @@ name: Track Prices
 
 on:
   workflow_dispatch:
+    inputs:
+      add_product_json:
+        description: 'Optional JSON of a new product to add to tracking'
+        required: false
+        type: string
 
 permissions:
   contents: read
 
 env:
   NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+  ADD_PRODUCT_JSON: ${{ inputs.add_product_json }}
 
 jobs:
   track:
