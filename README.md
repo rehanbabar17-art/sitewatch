@@ -1,98 +1,70 @@
-# Sitewatch — Price & Stock Tracker
+# 🛒 Sitewatch — Automated E-Commerce Price & Stock Tracker
 
-Tracks the **actual selling price and stock status** of products you configure
-and alerts via [ntfy.sh](https://ntfy.sh) whenever a price changes, an item
-restocks or goes out of stock, or a product hits its lowest-ever recorded price.
+**Sitewatch** is a headless, serverless price and inventory tracking engine powered by **GitHub Actions**, **Playwright (Chromium)**, and **ntfy.sh**.
 
-- Prices are rendered client-side on many stores (e.g. Daraz), so each run uses
-  **Playwright + headless Chromium** on GitHub Actions runners.
-- Shopify-based stores can be read without rendering via the store's `.json`
-  API by marking the product with `"shopify": true`.
-- Everything is run from GitHub Actions, triggered on demand (e.g. hourly via
-  cron-job.org using a workflow-dispatch request).
+It automatically monitors prices, struck-through MRPs, stock availability, and all-time-low records across multi-vendor e-commerce stores (including Shopify stores, Daraz marketplace, and custom brand websites) while keeping monitored product lists, URLs, and pricing data private.
 
-## Privacy & secrets
+---
 
-This repository contains **no products, no ntfy topic, and no history**.
-All personal configuration lives in GitHub Actions **repository secrets**:
+## ⚡ Key Highlights & Architecture
 
-| Secret | Purpose |
-|---|---|
-| `PRODUCTS_JSON` | JSON array of products to track (see `products.example.json`) |
-| `NTFY_TOPIC` | ntfy.sh topic to push alerts to |
+- 🔒 **Zero-Config Secrets & Private Cache Persistence**: Product configurations (`products.json`) and per-item historical price records (`*.csv`) are stored in the GitHub Actions cache (`sitewatch-data-*`). No sensitive URLs or private product lists are committed to git or exposed in repository secrets.
+- 🛍️ **Dual-Engine Scraping**:
+  - **Shopify API Engine**: Lightweight direct `.json` endpoint extraction + `cart/add.js` inventory validation for high-speed checks on Shopify stores without triggering bot-detection.
+  - **Playwright Headless Browser Engine**: Full headless Chromium rendering with client-side price extraction and stock status detection for dynamic Single Page Applications (SPAs) and marketplaces like Daraz.
+- 🔔 **Instant Multi-Device Alerts**: Real-time push notifications via [ntfy.sh](https://ntfy.sh) for price drops, price increases, restocks, out-of-stock events, and all-time lows.
+- 🛡️ **Privacy-Hardened Logs**: Actions console output and job step summaries are anonymized (`Item #1`, `Item #2`, etc.) to protect tracked product names in public repository runs.
 
-Price-history CSV files are kept **out of the repository** as well: they are
-persisted between runs in the private GitHub Actions cache (key `price-history-*`),
-never committed to git.
+---
 
-## Products format
+## 🚀 How It Works
 
-Each product in `PRODUCTS_JSON` (a JSON array) looks like:
-
-```json
-{
-  "name": "Example Shopify Product",
-  "url": "https://shop.example.com/products/example-product",
-  "history_file": "example_shopify_history.csv",
-  "baseline_price": 2500,
-  "shopify": true
-}
+```
+[cron-job.org / Webhook / Dispatch]
+               │
+               ▼
+   [GitHub Actions Workflow]
+               │
+  ┌────────────┴────────────┐
+  │  1. Restore Cache       │ ◄── Restores products.json & *.csv history
+  │  2. Execute Scraper     │
+  │     ├─ Shopify API      │ ◄── Instant JSON + cart probe
+  │     └─ Playwright       │ ◄── Full Chromium browser rendering
+  │  3. Change Detection    │ ◄── Compares vs last reliable price & history
+  │  4. Alert Dispatch      │ ──► Sends push notification via ntfy.sh
+  │  5. Save Cache          │ ──► Persists updated products.json & *.csv
+  └─────────────────────────┘
 ```
 
-- `name` — display name used in alerts.
-- `url` — product page. For Shopify stores this must be the
-  `https://<store>/products/<handle>` URL (used to build the `.json` API call).
-- `history_file` — local CSV filename for this product's history (cached).
-- `baseline_price` — expected price used as a sanity check: values deviating
-  more than 50% from it are treated as unreliable reads and never fire alerts.
-- `shopify` — optional; set `true` to use the lightweight `.json` + `cart/add.js`
-  API instead of rendering the page with Playwright.
+---
 
-## Alerts
+## 📦 Data & Caching Model
 
-Alerts fire when:
+| Component | Storage Location | Purpose |
+| :--- | :--- | :--- |
+| **`products.json`** | GitHub Actions Cache (`sitewatch-data-*`) | List of tracked items, target URLs, baseline prices, and store flags. |
+| **`*.csv` History Files** | GitHub Actions Cache (`sitewatch-data-*`) | Timestamped log of recorded prices, stock flags, and change events. |
+| **`NTFY_TOPIC`** | GitHub Repository Secret | Secret topic channel for encrypted push notifications. |
 
-- **Price changes** (up or down)
-- **Item comes back in stock** (restock)
-- **Item goes out of stock**
-- **Item hits its all-time lowest price** (distinctive alert)
+---
 
-Reads that are unreliable (page did not render, price outside the sane range)
-are recorded as `unreliable` and never trigger alerts.
+## 🔔 Alert Triggers
 
-## cron-job.org setup
+- 📉 **Price Drop**: Fired when the active selling price drops below the previous recorded price.
+- 📈 **Price Increase**: Fired when a price increases.
+- 🛒 **Back in Stock (Restock)**: Fired when an out-of-stock item becomes available.
+- ⚠️ **Out of Stock**: Fired when an in-stock item sells out.
+- 🎉 **All-Time Low**: Distinctive high-priority alert when a price reaches the lowest price ever recorded in its CSV history.
 
-1. Create a **GitHub fine-grained PAT** with `Actions: Read & Write` permission
-   on the target repository.
-2. Create a cron-job.org job pointing at:
+---
 
-   ```
-   https://api.github.com/repos/<owner>/<repo>/actions/workflows/track-price.yml/dispatches
-   ```
+## 🛠️ Repository Structure
 
-   - Method: `POST`
-   - Schedule: e.g. every 1 hour
-   - Request body: `{"ref":"main"}`
-   - Headers:
-     - `Authorization: Bearer <PAT>`
-     - `Accept: application/vnd.github+json`
-     - `Content-Type: application/json`
-
-## Local run
-
-```bash
-pip install -r requirements.txt
-python -m playwright install --with-deps chromium
-
-PRODUCTS_JSON='[{"name":"...","url":"...","history_file":"x.csv","baseline_price":100}]' \
-NTFY_TOPIC=your-ntfy-topic \
-python3 price_tracker.py
 ```
-
-## Files
-
-| File | Purpose |
-|---|---|
-| `price_tracker.py` | Main tracker (fetch, detect, alert). |
-| `products.example.json` | Example `PRODUCTS_JSON` structure. |
-| `.github/workflows/track-price.yml` | GitHub Actions workflow (manual dispatch). |
+├── .github/workflows/
+│   └── track-price.yml    # GitHub Actions workflow runner (hourly/on-demand)
+├── price_tracker.py       # Core scraping, comparison, alerting & cache engine
+├── products.example.json  # Reference schema template for products
+├── requirements.txt       # Python dependencies (Playwright)
+└── README.md              # Documentation
+```
