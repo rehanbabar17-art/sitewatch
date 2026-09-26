@@ -8,7 +8,6 @@ permissions:
 
 env:
   NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-  PRODUCTS_JSON: ${{ secrets.PRODUCTS_JSON }}
 
 jobs:
   track:
@@ -30,7 +29,6 @@ jobs:
           key: sitewatch-data-${{ github.run_id }}
           restore-keys: |
             sitewatch-data-
-            price-history-
 
       - name: Install Python deps
         run: |
