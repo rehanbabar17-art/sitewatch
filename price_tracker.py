@@ -37,6 +37,20 @@ if not PRODUCTS and os.getenv("PRODUCTS_JSON"):
     except Exception as e:
         print(f"  ⚠ Failed to parse PRODUCTS_JSON: {e}")
 
+# Append new product if requested via ADD_PRODUCT_JSON
+_new_prod_raw = os.getenv("ADD_PRODUCT_JSON", "").strip()
+if _new_prod_raw:
+    try:
+        _new_prod = _json.loads(_new_prod_raw)
+        _existing_urls = {p.get("url") for p in PRODUCTS}
+        if _new_prod.get("url") not in _existing_urls:
+            PRODUCTS.append(_new_prod)
+            print("  ✨ Appended new product to cache tracking list")
+            with open("products.json", "w", encoding="utf-8") as f:
+                _json.dump(PRODUCTS, f, indent=2)
+    except Exception as e:
+        print(f"  ⚠ Failed to add new product from ADD_PRODUCT_JSON: {e}")
+
 
 
 
