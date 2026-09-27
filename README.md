@@ -59,6 +59,13 @@ The repository requires these encrypted Actions secrets: `B2_KEY_ID`, `B2_APPLIC
 
 To start from a clean history, run **Actions → Track Prices → Run workflow**, enable **Clear all cached CSV price history before this run**, and run it twice. The first run records the current prices and may send initial change/restock alerts; the second run confirms the saved B2 history prevents duplicate alerts.
 
+### Verified B2 migration and tests
+
+- The existing Actions cache was bootstrapped into the private `sitewatch/` B2 folder.
+- The first clean-history test restored B2 data, cleared **16** CSV history files, checked **16 products**, accepted **27** ntfy alerts, and uploaded 16 CSV histories back to B2.
+- The second test restored the same B2 data, checked 16 products, accepted **0** duplicate alerts, and uploaded the updated 16 CSV histories successfully.
+- The old GitHub Actions cache is no longer saved; B2 is now the authoritative persistence layer.
+
 ---
 
 ## 🔔 Alert Triggers
