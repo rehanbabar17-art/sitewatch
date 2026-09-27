@@ -34,6 +34,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install Python deps
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
       # This restores the previous Actions cache only as a one-time bootstrap
       # source. B2 is authoritative after the first successful upload.
       - name: Restore legacy cache for B2 bootstrap
@@ -56,11 +61,6 @@ jobs:
         env:
           B2_COMMAND: clear-history
         run: python3 b2_sync.py
-
-      - name: Install Python deps
-        run: |
-          pip install -r requirements.txt
-          python -m playwright install --with-deps chromium
 
       - name: Record prices & stock
         id: price
