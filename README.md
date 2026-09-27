@@ -8,7 +8,7 @@ It automatically monitors prices, struck-through MRPs, stock availability, and a
 
 ## ⚡ Key Highlights & Architecture
 
-- 🔒 **Zero-Config Secrets & Private Cache Persistence**: Product configurations (`products.json`) and per-item historical price records (`*.csv`) are stored in the GitHub Actions cache (`sitewatch-data-*`). No sensitive URLs or private product lists are committed to git or exposed in repository secrets.
+- 🔒 **Private B2 Persistence**: Product configurations (`products.json`) and per-item historical price records (`*.csv`) are stored in the private `sitewatch/` folder in Backblaze B2. No sensitive URLs or private product lists are committed to git.
 - 🛍️ **Dual-Engine Scraping**:
   - **Shopify API Engine**: Lightweight direct `.json` endpoint extraction + `cart/add.js` inventory validation for high-speed checks on Shopify stores without triggering bot-detection.
   - **Playwright Headless Browser Engine**: Full headless Chromium rendering with client-side price extraction and stock status detection for dynamic Single Page Applications (SPAs) and marketplaces like Daraz.
@@ -26,13 +26,13 @@ It automatically monitors prices, struck-through MRPs, stock availability, and a
    [GitHub Actions Workflow]
                │
   ┌────────────┴────────────┐
-  │  1. Restore Cache       │ ◄── Restores products.json & *.csv history
+  │  1. Restore B2          │ ◄── Restores products.json & *.csv history
   │  2. Execute Scraper     │
   │     ├─ Shopify API      │ ◄── Instant JSON + cart probe
   │     └─ Playwright       │ ◄── Full Chromium browser rendering
   │  3. Change Detection    │ ◄── Compares vs last reliable price & history
   │  4. Alert Dispatch      │ ──► Sends push notification via ntfy.sh
-  │  5. Save Cache          │ ──► Persists updated products.json & *.csv
+  │  5. Upload B2           │ ──► Persists updated products.json & *.csv
   └─────────────────────────┘
 ```
 
@@ -42,9 +42,22 @@ It automatically monitors prices, struck-through MRPs, stock availability, and a
 
 | Component | Storage Location | Purpose |
 | :--- | :--- | :--- |
-| **`products.json`** | GitHub Actions Cache (`sitewatch-data-*`) | List of tracked items, target URLs, baseline prices, and store flags. |
-| **`*.csv` History Files** | GitHub Actions Cache (`sitewatch-data-*`) | Timestamped log of recorded prices, stock flags, and change events. |
+| **`sitewatch/products.json`** | Private Backblaze B2 object | List of tracked items, target URLs, baseline prices, and store flags. |
+| **`sitewatch/*.csv` History Files** | Private Backblaze B2 objects | Timestamped log of recorded prices, stock flags, and change events. |
 | **`NTFY_TOPIC`** | GitHub Repository Secret | Secret topic channel for encrypted push notifications. |
+
+### Backblaze B2 setup
+
+The shared private bucket is `GithubRepoSecretRB17`. Sitewatch uses its own folder:
+
+```text
+sitewatch/products.json
+sitewatch/<product-history>.csv
+```
+
+The repository requires these encrypted Actions secrets: `B2_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET`, `B2_ENDPOINT`, and `NTFY_TOPIC`. The first B2-enabled run can bootstrap from the old Actions cache; subsequent runs read and write B2 directly. The old cache is no longer saved after migration.
+
+To start from a clean history, run **Actions → Track Prices → Run workflow**, enable **Clear all cached CSV price history before this run**, and run it twice. The first run records the current prices and may send initial change/restock alerts; the second run confirms the saved B2 history prevents duplicate alerts.
 
 ---
 

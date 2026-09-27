@@ -7,6 +7,11 @@ on:
         description: 'Optional JSON of a new product to add to tracking'
         required: false
         type: string
+      clear_history:
+        description: 'Clear all cached CSV price history before this run'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -14,6 +19,10 @@ permissions:
 env:
   NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
   ADD_PRODUCT_JSON: ${{ inputs.add_product_json }}
+  B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
+  B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+  B2_BUCKET: ${{ secrets.B2_BUCKET }}
+  B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
 
 jobs:
   track:
@@ -25,8 +34,9 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Restore price history and products from cache
-        id: history-restore
+      # This restores the previous Actions cache only as a one-time bootstrap
+      # source. B2 is authoritative after the first successful upload.
+      - name: Restore legacy cache for B2 bootstrap
         uses: actions/cache/restore@v4
         with:
           path: |
@@ -35,6 +45,17 @@ jobs:
           key: sitewatch-data-${{ github.run_id }}
           restore-keys: |
             sitewatch-data-
+
+      - name: Restore products and history from B2
+        env:
+          B2_COMMAND: download
+        run: python3 b2_sync.py
+
+      - name: Clear price history for a fresh test
+        if: ${{ inputs.clear_history == true }}
+        env:
+          B2_COMMAND: clear-history
+        run: python3 b2_sync.py
 
       - name: Install Python deps
         run: |
@@ -45,11 +66,12 @@ jobs:
         id: price
         run: python3 price_tracker.py
 
-      - name: Save price history and products to cache
-        uses: actions/cache/save@v4
+      - name: Upload price history and products to B2
+        if: ${{ always() && steps.price.outcome == 'success' }}
+        env:
+          B2_COMMAND: upload
+        run: python3 b2_sync.py
+
+      - name: Secure cleanup of local private data
         if: always()
-        with:
-          path: |
-            *.csv
-            products.json
-          key: sitewatch-data-${{ github.run_id }}
+        run: rm -f products.json *.csv
