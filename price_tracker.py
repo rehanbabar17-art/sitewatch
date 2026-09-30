@@ -542,16 +542,22 @@ def _update_product_metadata(product, data, timestamp):
     return corrected
 
 
-def notify(title, message, tags):
+def notify(title, message, tags, product_url=None):
     if not NTFY_TOPIC:
         return
     conn = http.client.HTTPSConnection("ntfy.sh", timeout=30)
+    headers = {
+        "Title": title.encode("utf-8"),
+        "Tags": tags,
+        "Content-Type": "text/plain; charset=utf-8",
+    }
+    parsed_url = urllib.parse.urlparse(str(product_url or "").strip())
+    if parsed_url.scheme in ("http", "https") and parsed_url.netloc and not any(c.isspace() for c in str(product_url)):
+        product_url = str(product_url).strip()
+        message = f"{message}\n\nProduct link: {product_url}"
+        headers["Click"] = product_url
     try:
-        conn.request("POST", f"/{NTFY_TOPIC}", body=message.encode("utf-8"), headers={
-            "Title": title.encode("utf-8"),
-            "Tags": tags,
-            "Content-Type": "text/plain; charset=utf-8",
-        })
+        conn.request("POST", f"/{NTFY_TOPIC}", body=message.encode("utf-8"), headers=headers)
         response = conn.getresponse()
         print(f"  🔔 ntfy alert dispatched ({response.status})")
     except Exception as exc:
@@ -666,14 +672,25 @@ async def main():
                     f"Sitewatch: Price change - {product_name}",
                     f"{product_name}\nRs. {last_price:,} -> Rs. {price:,}{sale_line}{availability_line(in_stock)}",
                     "pricechart,warning",
+                    product_url=product.get("url"),
                 )
 
             if in_stock == 1 and last_stock == 0:
                 events.append("Back in stock")
-                notify(f"Sitewatch: Restocked - {product_name}", f"{product_name} is back in stock!\nCurrent price: {fmt_price(price)}", "white_check_mark,shopping_cart")
+                notify(
+                    f"Sitewatch: Restocked - {product_name}",
+                    f"{product_name} is back in stock!\nCurrent price: {fmt_price(price)}",
+                    "white_check_mark,shopping_cart",
+                    product_url=product.get("url"),
+                )
             elif in_stock == 0 and last_stock == 1:
                 events.append("Out of stock")
-                notify(f"Sitewatch: Out of stock - {product_name}", f"{product_name} is no longer available. Current price: {fmt_price(price)}", "warning")
+                notify(
+                    f"Sitewatch: Out of stock - {product_name}",
+                    f"{product_name} is no longer available. Current price: {fmt_price(price)}",
+                    "warning",
+                    product_url=product.get("url"),
+                )
 
             seen_prices = [_price(row.get("price")) for row in history if str(row.get("price", "")).strip()]
             seen_prices = [value for value in seen_prices if value is not None]
@@ -683,6 +700,7 @@ async def main():
                     f"Sitewatch: ALL-TIME LOW - {product_name}",
                     f"{product_name}\nNew lowest price: Rs. {price:,}\nPrevious low: Rs. {min(seen_prices):,}{availability_line(in_stock)}",
                     "chart_with_downwards_trend,partying_face",
+                    product_url=product.get("url"),
                 )
 
             event = ""

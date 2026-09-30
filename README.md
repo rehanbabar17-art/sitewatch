@@ -12,7 +12,7 @@ It automatically monitors prices, struck-through MRPs, stock availability, and a
 - 🛍️ **Dual-Engine Scraping**:
   - **Shopify API Engine**: Lightweight read-only `.json` endpoint extraction for price/title data, combined with rendered product-page availability checks for Shopify stock.
   - **Playwright Headless Browser Engine**: Full headless Chromium rendering with client-side price extraction and stock status detection for dynamic Single Page Applications (SPAs) and marketplaces like Daraz.
-- 🔔 **Instant Multi-Device Alerts**: Real-time push notifications via [ntfy.sh](https://ntfy.sh) for price drops, price increases, restocks, out-of-stock events, and all-time lows.
+- 🔔 **Instant Multi-Device Alerts**: Real-time push notifications via [ntfy.sh](https://ntfy.sh) for price drops, price increases, restocks, out-of-stock events, and all-time lows. Each alert includes the product URL and opens it when tapped.
 - 🧾 **Availability on Every Price Alert**: Price-change and all-time-low notifications include the current purchase status — **In stock**, **Out of stock**, or **Unknown** — so a low price is not mistaken for an item that can be purchased.
 - 🛡️ **Privacy-Hardened Logs**: Actions console output and job step summaries are anonymized (`Item #1`, `Item #2`, etc.) to protect tracked product names in public repository runs.
 

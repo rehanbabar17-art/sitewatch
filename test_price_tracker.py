@@ -1,11 +1,13 @@
 import json
 import unittest
 from datetime import datetime, timezone
+from unittest.mock import patch
 from price_tracker import (
     availability_line,
     discounted_compare_price,
     infer_stock_status,
     is_daily_audit_due,
+    notify,
     price_is_plausible,
     product_from_link_or_json,
     read_stock,
@@ -42,6 +44,23 @@ class StockNotificationTests(unittest.TestCase):
 
     def test_unknown_page_is_not_assumed_in_stock(self):
         self.assertEqual(infer_stock_status("Product details and price"), -1)
+
+
+class NtfyLinkTests(unittest.TestCase):
+    def test_notification_includes_visible_and_clickable_product_link(self):
+        url = "https://shop.example/products/item?id=123"
+        with patch("price_tracker.NTFY_TOPIC", "sitewatch"), patch("price_tracker.http.client.HTTPSConnection") as connection_class:
+            connection = connection_class.return_value
+            connection.getresponse.return_value.status = 200
+            notify("Price change", "Price dropped", "warning", product_url=url)
+
+        method, path = connection.request.call_args.args[:2]
+        body = connection.request.call_args.kwargs["body"].decode("utf-8")
+        headers = connection.request.call_args.kwargs["headers"]
+        self.assertEqual(method, "POST")
+        self.assertEqual(path, "/sitewatch")
+        self.assertIn(f"Product link: {url}", body)
+        self.assertEqual(headers["Click"], url)
 
 
 class ProductInputTests(unittest.TestCase):
