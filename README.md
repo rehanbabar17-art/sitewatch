@@ -8,9 +8,9 @@ It automatically monitors prices, struck-through MRPs, stock availability, and a
 
 ## ⚡ Key Highlights & Architecture
 
-- 🔒 **Private B2 Persistence**: Product configurations (`products.json`) and per-item historical price records (`*.csv`) are stored in the private `sitewatch/` folder in Backblaze B2. No sensitive URLs or private product lists are committed to git.
+- 🔒 **Private B2 Persistence**: Product configurations (`products.json`), per-item historical price records (`*.csv`), and daily-audit state (`audit_state.json`) are stored in the private `sitewatch/` folder in Backblaze B2. No private product lists are committed to git.
 - 🛍️ **Dual-Engine Scraping**:
-  - **Shopify API Engine**: Lightweight direct `.json` endpoint extraction + `cart/add.js` inventory validation for high-speed checks on Shopify stores without triggering bot-detection.
+  - **Shopify API Engine**: Lightweight read-only `.json` endpoint extraction for price/title data, combined with rendered product-page availability checks for Shopify stock.
   - **Playwright Headless Browser Engine**: Full headless Chromium rendering with client-side price extraction and stock status detection for dynamic Single Page Applications (SPAs) and marketplaces like Daraz.
 - 🔔 **Instant Multi-Device Alerts**: Real-time push notifications via [ntfy.sh](https://ntfy.sh) for price drops, price increases, restocks, out-of-stock events, and all-time lows.
 - 🧾 **Availability on Every Price Alert**: Price-change and all-time-low notifications include the current purchase status — **In stock**, **Out of stock**, or **Unknown** — so a low price is not mistaken for an item that can be purchased.
@@ -45,6 +45,7 @@ It automatically monitors prices, struck-through MRPs, stock availability, and a
 | :--- | :--- | :--- |
 | **`sitewatch/products.json`** | Private Backblaze B2 object | List of tracked items, target URLs, baseline prices, and store flags. |
 | **`sitewatch/*.csv` History Files** | Private Backblaze B2 objects | Timestamped log of recorded prices, stock flags, and change events. |
+| **`sitewatch/audit_state.json`** | Private Backblaze B2 object | Date of the last completed daily audit, preventing repeated same-day audits. |
 | **`NTFY_TOPIC`** | GitHub Repository Secret | Secret topic channel for encrypted push notifications. |
 
 ### Backblaze B2 setup
@@ -66,6 +67,25 @@ To start from a clean history, run **Actions → Track Prices → Run workflow**
 - The first clean-history test restored B2 data, cleared **16** CSV history files, checked **16 products**, accepted **27** ntfy alerts, and uploaded 16 CSV histories back to B2.
 - The second test restored the same B2 data, checked 16 products, accepted **0** duplicate alerts, and uploaded the updated 16 CSV histories successfully.
 - The old GitHub Actions cache is no longer saved; B2 is now the authoritative persistence layer.
+
+### URL-only additions and daily audit
+
+Run **Actions → Track Prices → Run workflow** and enter a product URL by itself
+in **Optional product URL**. Sitewatch discovers the product name, current
+selling price, compare-at/list price (when provided), and stock from the page;
+JSON product input remains supported for advanced use. The first reliable price
+becomes the baseline, so adding a link alone does not cause a false price-rise
+alert.
+
+The workflow also runs at **09:05 Asia/Karachi**. The first successful tracker
+run at or after 09:00 local time performs the daily metadata audit for every
+product. It refreshes the page title, price, sale/list price, and stock, applies
+confident corrections to the private product record, and retries the audit on
+later runs if any product could not be verified. The completion date is kept in
+the private B2 `sitewatch/audit_state.json` object.
+
+Shopify stock checks use read-only product JSON and rendered product-page
+availability. Sitewatch no longer posts to `/cart/add.js` to infer stock.
 
 ### Stock-aware alert behavior
 

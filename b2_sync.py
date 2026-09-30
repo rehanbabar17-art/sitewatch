@@ -13,8 +13,10 @@ from botocore.exceptions import ClientError
 
 PREFIX = "sitewatch/"
 PRODUCTS_KEY = f"{PREFIX}products.json"
+AUDIT_KEY = f"{PREFIX}audit_state.json"
 ROOT = Path.cwd()
 PRODUCTS_FILE = ROOT / "products.json"
+AUDIT_FILE = ROOT / "audit_state.json"
 
 
 def client():
@@ -68,6 +70,14 @@ def download() -> bool:
         raise RuntimeError("sitewatch/products.json must contain a JSON array")
     PRODUCTS_FILE.write_bytes(products)
 
+    try:
+        audit_state = s3.get_object(Bucket=bucket, Key=AUDIT_KEY)["Body"].read()
+        AUDIT_FILE.write_bytes(audit_state)
+    except ClientError as error:
+        if not is_missing(error):
+            raise
+        AUDIT_FILE.unlink(missing_ok=True)
+
     for csv_file in ROOT.glob("*.csv"):
         csv_file.unlink()
     for key in list_keys(s3, bucket):
@@ -93,6 +103,9 @@ def upload() -> bool:
     existing = list_keys(s3, bucket)
     wanted = {PRODUCTS_KEY}
     s3.put_object(Bucket=bucket, Key=PRODUCTS_KEY, Body=PRODUCTS_FILE.read_bytes(), ContentType="application/json")
+    if AUDIT_FILE.exists():
+        wanted.add(AUDIT_KEY)
+        s3.put_object(Bucket=bucket, Key=AUDIT_KEY, Body=AUDIT_FILE.read_bytes(), ContentType="application/json")
     for csv_file in sorted(ROOT.glob("*.csv")):
         key = f"{PREFIX}{csv_file.name}"
         wanted.add(key)

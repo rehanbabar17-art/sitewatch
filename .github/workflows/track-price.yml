@@ -1,10 +1,13 @@
 name: Track Prices
 
 on:
+  schedule:
+    # 04:05 UTC = 09:05 Asia/Karachi; the first run after 09:00 audits all metadata.
+    - cron: '5 4 * * *'
   workflow_dispatch:
     inputs:
       add_product_json:
-        description: 'Optional JSON of a new product to add to tracking'
+        description: 'Optional product URL (name and prices are discovered automatically) or JSON product object'
         required: false
         type: string
       clear_history:
@@ -12,6 +15,10 @@ on:
         required: false
         default: false
         type: boolean
+
+concurrency:
+  group: sitewatch-track-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -74,4 +81,4 @@ jobs:
 
       - name: Secure cleanup of local private data
         if: always()
-        run: rm -f products.json *.csv
+        run: rm -f products.json audit_state.json *.csv
