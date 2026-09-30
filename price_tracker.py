@@ -190,11 +190,6 @@ def price_is_plausible(price: int | None, baseline: int | None, compare_at: int 
 def infer_stock_status(text: str, *, structured=None, form_signals=None) -> int:
     """Infer availability only from explicit product-page evidence."""
     structured = (structured or "").lower()
-    if "outofstock" in structured or "soldout" in structured:
-        return 0
-    if "instock" in structured or "limitedavailability" in structured:
-        return 1
-
     lines = [line.strip().lower() for line in (text or "").splitlines()]
     if any(re.fullmatch(r"(?:sold\s*out|out\s*of\s*stock|currently\s*unavailable)", line) for line in lines):
         return 0
@@ -205,6 +200,16 @@ def infer_stock_status(text: str, *, structured=None, form_signals=None) -> int:
             return 0
         if signal.get("disabled") and re.search(r"add\s+to\s+(?:cart|bag|basket)", label):
             return 0
+
+    # Visible product-page evidence is authoritative over stale JSON-LD or
+    # theme metadata. A sold-out page can retain an old InStock offer in its
+    # structured data, and an enabled add-to-cart control can belong to a
+    # related/recommended item rather than the primary product.
+    if "outofstock" in structured or "soldout" in structured:
+        return 0
+    if "instock" in structured or "limitedavailability" in structured:
+        return 1
+
     if any(re.search(r"add\s+to\s+(?:cart|bag|basket)", str(s.get("text", "")), re.I) and not s.get("disabled") for s in (form_signals or [])):
         return 1
 

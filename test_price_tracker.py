@@ -39,6 +39,16 @@ class StockNotificationTests(unittest.TestCase):
     def test_sold_out_page_signal_overrides_add_to_cart_from_related_items(self):
         self.assertEqual(infer_stock_status("Out of Dust\nSold Out\nRs.5,990"), 0)
 
+    def test_visible_sold_out_signal_overrides_stale_instock_metadata(self):
+        self.assertEqual(
+            infer_stock_status(
+                "Out Of Dust\nSold Out\nRs. 5,990",
+                structured="https://schema.org/InStock",
+                form_signals=[{"text": "Add to Bag", "disabled": False}],
+            ),
+            0,
+        )
+
     def test_enabled_add_to_bag_is_positive_stock_evidence(self):
         self.assertEqual(infer_stock_status("Product", form_signals=[{"text": "Add to Bag", "disabled": False}]), 1)
 
