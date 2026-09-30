@@ -13,6 +13,7 @@ It automatically monitors prices, struck-through MRPs, stock availability, and a
   - **Shopify API Engine**: Lightweight direct `.json` endpoint extraction + `cart/add.js` inventory validation for high-speed checks on Shopify stores without triggering bot-detection.
   - **Playwright Headless Browser Engine**: Full headless Chromium rendering with client-side price extraction and stock status detection for dynamic Single Page Applications (SPAs) and marketplaces like Daraz.
 - 🔔 **Instant Multi-Device Alerts**: Real-time push notifications via [ntfy.sh](https://ntfy.sh) for price drops, price increases, restocks, out-of-stock events, and all-time lows.
+- 🧾 **Availability on Every Price Alert**: Price-change and all-time-low notifications include the current purchase status — **In stock**, **Out of stock**, or **Unknown** — so a low price is not mistaken for an item that can be purchased.
 - 🛡️ **Privacy-Hardened Logs**: Actions console output and job step summaries are anonymized (`Item #1`, `Item #2`, etc.) to protect tracked product names in public repository runs.
 
 ---
@@ -66,12 +67,22 @@ To start from a clean history, run **Actions → Track Prices → Run workflow**
 - The second test restored the same B2 data, checked 16 products, accepted **0** duplicate alerts, and uploaded the updated 16 CSV histories successfully.
 - The old GitHub Actions cache is no longer saved; B2 is now the authoritative persistence layer.
 
+### Stock-aware alert behavior
+
+Sitewatch records `in_stock` with every reliable price observation in each
+product's CSV history. The value is represented as `1` (in stock), `0` (out of
+stock), or `-1` (unknown). Price-change and all-time-low notifications append
+the current availability status. Unknown availability is never silently
+treated as available, and an out-of-stock history value of `0` is preserved
+when comparing stock transitions.
+
 ---
 
 ## 🔔 Alert Triggers
 
 - 📉 **Price Drop**: Fired when the active selling price drops below the previous recorded price.
-- 📈 **Price Increase**: Fired when a price increases.
+- 📈 **Price Increase**: Fired when a price increases; the alert includes the current availability status.
+- 🧾 **Price Alert Availability**: Price drops and all-time lows include `Availability: In stock`, `Availability: Out of stock`, or `Availability: Unknown`.
 - 🛒 **Back in Stock (Restock)**: Fired when an out-of-stock item becomes available.
 - ⚠️ **Out of Stock**: Fired when an in-stock item sells out.
 - 🎉 **All-Time Low**: Distinctive high-priority alert when a price reaches the lowest price ever recorded in its CSV history.
