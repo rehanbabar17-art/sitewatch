@@ -3,8 +3,10 @@ import unittest
 from datetime import datetime, timezone
 from price_tracker import (
     availability_line,
+    discounted_compare_price,
     infer_stock_status,
     is_daily_audit_due,
+    price_is_plausible,
     product_from_link_or_json,
     read_stock,
     stock_label,
@@ -59,6 +61,22 @@ class ProductInputTests(unittest.TestCase):
     def test_invalid_product_input_is_rejected(self):
         with self.assertRaises(ValueError):
             product_from_link_or_json("not a URL")
+
+
+class SalePriceTests(unittest.TestCase):
+    def test_reads_daraz_discount_line_as_compare_at_price(self):
+        text = "Product\nRs. 999\nRs. 1,999-50%\nQuantity\nDelivery Options"
+        self.assertEqual(discounted_compare_price(text, 999), 1999)
+
+    def test_reads_daraz_discount_line_with_spaced_discount(self):
+        text = "Derma Roller\nRs. 188\nRs. 400 -53%\nQuantity"
+        self.assertEqual(discounted_compare_price(text, 188), 400)
+
+    def test_allows_large_discount_when_list_price_matches_baseline(self):
+        self.assertTrue(price_is_plausible(999, 1999, 1999))
+
+    def test_rejects_large_drop_without_list_price_evidence(self):
+        self.assertFalse(price_is_plausible(999, 1999, None))
 
 
 class DailyAuditTests(unittest.TestCase):

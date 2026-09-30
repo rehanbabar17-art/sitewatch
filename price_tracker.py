@@ -156,6 +156,37 @@ def availability_line(in_stock: int) -> str:
     return f"\nAvailability: {stock_label(in_stock)}"
 
 
+def discounted_compare_price(text: str, selling_price: int | None) -> int | None:
+    """Read a crossed-out/list price from compact sale lines such as Rs. 1,999-50%."""
+    if selling_price is None:
+        return None
+    for line in _normalise_stock_context(text).splitlines():
+        line = line.strip()
+        if re.match(r"^(?:quantity|delivery options|return\s*&\s*warranty)\b", line, re.I):
+            break
+        if not re.search(r"(?:-\s*\d{1,3}\s*%|\d{1,3}\s*%\s*(?:off|discount))", line, re.I):
+            continue
+        amounts = re.findall(r"(?:Rs\.?|PKR)\s*([0-9][0-9,]*(?:\.\d{1,2})?)", line, re.I)
+        values = [_price(value) for value in amounts]
+        values = [value for value in values if value and value > selling_price]
+        if values:
+            return max(values)
+    return None
+
+
+def price_is_plausible(price: int | None, baseline: int | None, compare_at: int | None) -> bool:
+    """Allow genuine large discounts when the displayed list price confirms them."""
+    if price is None or baseline is None:
+        return True
+    if baseline * 0.5 <= price <= baseline * 1.5:
+        return True
+    return bool(
+        compare_at is not None
+        and compare_at > price
+        and baseline * 0.75 <= compare_at <= baseline * 1.25
+    )
+
+
 def infer_stock_status(text: str, *, structured=None, form_signals=None) -> int:
     """Infer availability only from explicit product-page evidence."""
     structured = (structured or "").lower()
@@ -357,6 +388,8 @@ async def fetch_product(page, product: dict) -> dict:
                 if price:
                     price_source = "rendered-text"
                     break
+    if compare_at is None:
+        compare_at = discounted_compare_price(body, price)
 
     form_signals = []
     try:
@@ -376,7 +409,7 @@ async def fetch_product(page, product: dict) -> dict:
     # A baseline sanity check guards body-text false positives, but structured
     # product pricing remains authoritative even when a genuine sale is large.
     baseline = _price(product.get("baseline_price"))
-    if price is not None and baseline and price_source == "rendered-text" and not (baseline * 0.5 <= price <= baseline * 1.5):
+    if price is not None and baseline and price_source == "rendered-text" and not price_is_plausible(price, baseline, compare_at):
         price = None
 
     return {
