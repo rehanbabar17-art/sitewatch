@@ -60,6 +60,30 @@ def fmt_price(price):
         return "N/A"
     return f"Rs. {price:,}"
 
+
+def stock_label(in_stock: int) -> str:
+    """Return a human-readable availability label for a stock flag."""
+    return {1: "In stock", 0: "Out of stock", -1: "Unknown"}.get(
+        in_stock, "Unknown"
+    )
+
+
+def read_stock(row: dict, default: int = -1) -> int:
+    """Read a persisted stock flag without treating 0 (out of stock) as false."""
+    value = row.get("in_stock")
+    if value is None or str(value).strip() == "":
+        return default
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed in (-1, 0, 1) else default
+
+
+def availability_line(in_stock: int) -> str:
+    """Format availability for inclusion in a price-related notification."""
+    return f"\nAvailability: {stock_label(in_stock)}"
+
 def fetch_shopify_api(product: dict) -> dict:
     """Fetch price + stock via Shopify .json + cart/add.js (no rendering).
     Works from CI/datacenter IPs where the store's HTML page is blocked."""
@@ -280,9 +304,9 @@ async def main():
             compare_at = data.get("compare_at_price")
             in_stock = data["in_stock"]
             valid = data["valid"]
-            stock_label = {1: "In stock", 0: "Out of stock", -1: "Unknown"}[in_stock]
+            stock_status = stock_label(in_stock)
             mrp_str = f" · MRP Rs. {compare_at:,}" if compare_at else ""
-            print(f"  • Item #{index}: Checked · {stock_label}")
+            print(f"  • Item #{index}: Checked · {stock_status}")
 
             history = load_history(product["history_file"])
             last_reliable = None
@@ -292,7 +316,7 @@ async def main():
                     break
             last = last_reliable if last_reliable else {}
             last_price = int(last.get("price") or product["baseline_price"])
-            last_stock = int(last.get("in_stock") or 1)
+            last_stock = read_stock(last, default=-1)
 
             event = ""
 
@@ -322,7 +346,8 @@ async def main():
                 mrp_line = f"\nMRP: Rs. {compare_at:,}" if compare_at else ""
                 notify(
                     f"Sitewatch: Price change - {product['name']}",
-                    f"{product['name']}\nRs. {last_price:,} -> Rs. {price:,}{mrp_line}",
+                    f"{product['name']}\nRs. {last_price:,} -> Rs. {price:,}"
+                    f"{mrp_line}{availability_line(in_stock)}",
                     "pricechart,warning",
                 )
 
@@ -355,7 +380,9 @@ async def main():
                     mrp_line = f"\nMRP: Rs. {compare_at:,}" if compare_at else ""
                     notify(
                         f"Sitewatch: ALL-TIME LOW - {product['name']}",
-                        f"{product['name']}\nNew lowest price: Rs. {price:,}\nPrevious low: Rs. {seen_min:,}{mrp_line}",
+                        f"{product['name']}\nNew lowest price: Rs. {price:,}\n"
+                        f"Previous low: Rs. {seen_min:,}{mrp_line}"
+                        f"{availability_line(in_stock)}",
                         "chart_with_downwards_trend,partying_face",
                     )
 
@@ -373,7 +400,7 @@ async def main():
 
             mrp_str = f"Rs. {compare_at:,} → " if compare_at else ""
             summary_lines.append(
-                f"- **Item #{index}**: {'In stock' if in_stock else 'Out of stock'} — {status}"
+                f"- **Item #{index}**: {stock_status} — {status}"
             )
             output_lines.append(
                 f"product{index}_price={price if price is not None else ''}"
@@ -382,7 +409,7 @@ async def main():
                 f"product{index}_compare_at={compare_at if compare_at else ''}"
             )
             output_lines.append(
-                f"product{index}_stock={'in' if in_stock else 'out'}"
+                f"product{index}_stock={('in' if in_stock == 1 else 'out' if in_stock == 0 else 'unknown')}"
             )
             output_lines.append(
                 f"product{index}_changed={'true' if events else 'false'}"
