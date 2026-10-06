@@ -524,7 +524,16 @@ def load_history(path: str) -> list[dict]:
 
 
 def save_history(path: str, history: list[dict]):
-    fields = ["timestamp", "price", "compare_at_price", "in_stock", "event"]
+    fields = [
+        "timestamp",
+        "price",
+        "compare_at_price",
+        "upcoming_sale_price",
+        "upcoming_sale_days",
+        "upcoming_sale_notified_date",
+        "in_stock",
+        "event",
+    ]
     with open(path, "w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(file, fieldnames=fields, extrasaction="ignore")
         writer.writeheader()
