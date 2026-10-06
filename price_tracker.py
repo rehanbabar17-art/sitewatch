@@ -188,6 +188,12 @@ def current_price_after_upcoming_sale(text: str, future_price: int | None) -> in
     return None
 
 
+def upcoming_sale_days(text: str) -> int | None:
+    """Extract only the whole-day countdown from a future Daraz sale."""
+    match = re.search(r"\bstarts?\s+in\s+(\d+)\s+day", text or "", re.I)
+    return int(match.group(1)) if match else None
+
+
 def discounted_compare_price(text: str, selling_price: int | None) -> int | None:
     """Read a crossed-out/list price from compact sale lines such as Rs. 1,999-50%."""
     if selling_price is None:
@@ -438,6 +444,7 @@ async def fetch_product(page, product: dict) -> dict:
         pass
     product_text = _normalise_stock_context(body)
     future_sale_price = upcoming_sale_price(product_text)
+    future_sale_days = upcoming_sale_days(product_text)
     visible_current_price = current_price_after_upcoming_sale(product_text, future_sale_price)
     if visible_current_price is not None:
         price = visible_current_price
@@ -460,6 +467,7 @@ async def fetch_product(page, product: dict) -> dict:
         "price": price,
         "compare_at_price": compare_at,
         "upcoming_sale_price": future_sale_price,
+        "upcoming_sale_days": future_sale_days,
         "price_source": price_source,
         "in_stock": in_stock,
         "valid": price is not None,
@@ -575,6 +583,7 @@ def _update_product_metadata(product, data, timestamp):
         product["compare_at_price"] = None
         product["sale_price"] = None
     product["upcoming_sale_price"] = data.get("upcoming_sale_price")
+    product["upcoming_sale_days"] = data.get("upcoming_sale_days")
     in_stock = data.get("in_stock", -1)
     if in_stock in (0, 1):
         if product.get("in_stock") != in_stock:
@@ -684,6 +693,7 @@ async def main():
             last_price = _price(last_reliable.get("price")) if last_reliable else baseline
             last_stock = read_stock(last_reliable or {}, default=-1)
             last_upcoming_sale = _price(last_reliable.get("upcoming_sale_price")) if last_reliable else None
+            last_upcoming_notice_date = (last_reliable or {}).get("upcoming_sale_notified_date")
 
             corrections = _update_product_metadata(product, data, timestamp)
             if audit_due and corrections:
@@ -710,20 +720,34 @@ async def main():
                 last_price = price
 
             future_sale_price = data.get("upcoming_sale_price")
-            if future_sale_price is not None and last_reliable and future_sale_price != last_upcoming_sale:
+            future_sale_days = data.get("upcoming_sale_days")
+            local_date = datetime.now(KARACHI).date().isoformat()
+            upcoming_changed = future_sale_price is not None and last_reliable and future_sale_price != last_upcoming_sale
+            upcoming_daily = future_sale_price is not None and future_sale_days is not None and last_upcoming_notice_date != local_date
+            if (upcoming_changed or upcoming_daily) and last_upcoming_notice_date != local_date:
                 events.append(f"Upcoming sale price: Rs. {future_sale_price:,}")
+                day_label = "day" if future_sale_days == 1 else "days"
+                countdown_line = (
+                    f"\n⏳ Upcoming sale starts in {future_sale_days} {day_label}"
+                    if future_sale_days is not None
+                    else ""
+                )
                 notify(
                     f"🔮 Upcoming sale - {product_name}",
-                    f"{product_name}\n🔮 Upcoming sale price: Rs. {future_sale_price:,}\nCurrent price: {fmt_price(price)}{availability_line(in_stock)}",
+                    f"{product_name}\n🔮 Upcoming sale price: Rs. {future_sale_price:,}{countdown_line}\nCurrent price: {fmt_price(price)}{availability_line(in_stock)}",
                     "crystal_ball,shopping_bags",
                     product_url=product.get("url"),
                 )
+                upcoming_notice_date = local_date
+            else:
+                upcoming_notice_date = last_upcoming_notice_date
 
             if price != last_price:
                 direction = "dropped" if price < last_price else "increased"
                 events.append(f"Price {direction}: Rs. {last_price:,} to Rs. {price:,}")
                 upcoming_line = (
                     f"\n🔮 Upcoming sale price: Rs. {data['upcoming_sale_price']:,}"
+                    + (f"\n⏳ Upcoming sale starts in {data['upcoming_sale_days']} {'day' if data['upcoming_sale_days'] == 1 else 'days'}" if data.get("upcoming_sale_days") is not None else "")
                     if data.get("upcoming_sale_price") is not None
                     else ""
                 )
@@ -758,6 +782,7 @@ async def main():
                 events.append(f"ALL-TIME LOW: Rs. {price:,} (prev low Rs. {min(seen_prices):,})")
                 upcoming_line = (
                     f"\n🔮 Upcoming sale price: Rs. {data['upcoming_sale_price']:,}"
+                    + (f"\n⏳ Upcoming sale starts in {data['upcoming_sale_days']} {'day' if data['upcoming_sale_days'] == 1 else 'days'}" if data.get("upcoming_sale_days") is not None else "")
                     if data.get("upcoming_sale_price") is not None
                     else ""
                 )
@@ -785,6 +810,8 @@ async def main():
                 "price": price,
                 "compare_at_price": compare_at or "",
                 "upcoming_sale_price": data.get("upcoming_sale_price") or "",
+                "upcoming_sale_days": data.get("upcoming_sale_days") or "",
+                "upcoming_sale_notified_date": upcoming_notice_date,
                 "in_stock": in_stock,
                 "event": event.rstrip(";"),
             })

@@ -106,6 +106,10 @@ class SalePriceTests(unittest.TestCase):
         text = "SaleRs. 664\nStarts in 2 day(s) 21:06:31\nRs. 944\nRs. 949-0.5%"
         self.assertEqual(current_price_after_upcoming_sale(text, 664), 944)
 
+    def test_upcoming_sale_countdown_returns_days_only(self):
+        from price_tracker import upcoming_sale_days
+        self.assertEqual(upcoming_sale_days("Starts in 2 day(s) 21:06:31"), 2)
+
     def test_reads_daraz_discount_line_as_compare_at_price(self):
         text = "Product\nRs. 999\nRs. 1,999-50%\nQuantity\nDelivery Options"
         self.assertEqual(discounted_compare_price(text, 999), 1999)
