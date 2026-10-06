@@ -702,7 +702,7 @@ async def main():
             last_price = _price(last_reliable.get("price")) if last_reliable else baseline
             last_stock = read_stock(last_reliable or {}, default=-1)
             last_upcoming_sale = _price(last_reliable.get("upcoming_sale_price")) if last_reliable else None
-            last_upcoming_notice_date = (last_reliable or {}).get("upcoming_sale_notified_date")
+            last_upcoming_notice_date = product.get("upcoming_sale_notified_date") or (last_reliable or {}).get("upcoming_sale_notified_date")
 
             corrections = _update_product_metadata(product, data, timestamp)
             if audit_due and corrections:
@@ -750,6 +750,7 @@ async def main():
                 upcoming_notice_date = local_date
             else:
                 upcoming_notice_date = last_upcoming_notice_date
+            product["upcoming_sale_notified_date"] = upcoming_notice_date
 
             if price != last_price:
                 direction = "dropped" if price < last_price else "increased"
