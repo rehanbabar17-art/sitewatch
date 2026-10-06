@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 from price_tracker import (
     availability_line,
+    current_price_after_upcoming_sale,
     discounted_compare_price,
     infer_stock_status,
     is_daily_audit_due,
@@ -12,6 +13,7 @@ from price_tracker import (
     product_from_link_or_json,
     read_stock,
     stock_label,
+    upcoming_sale_price,
 )
 
 
@@ -93,6 +95,17 @@ class ProductInputTests(unittest.TestCase):
 
 
 class SalePriceTests(unittest.TestCase):
+    def test_daraz_upcoming_sale_price_is_separate_from_current_price(self):
+        text = "SaleRs. 664\nStarts in 2 day(s) 21:06:31\nRs. 944\nRs. 949-0.5%"
+        self.assertEqual(upcoming_sale_price(text), 664)
+
+    def test_current_price_without_upcoming_sale_has_no_future_price(self):
+        self.assertIsNone(upcoming_sale_price("Rs. 944\nRs. 949-0.5%\nAdd to Cart"))
+
+    def test_current_price_is_read_after_future_sale_banner(self):
+        text = "SaleRs. 664\nStarts in 2 day(s) 21:06:31\nRs. 944\nRs. 949-0.5%"
+        self.assertEqual(current_price_after_upcoming_sale(text, 664), 944)
+
     def test_reads_daraz_discount_line_as_compare_at_price(self):
         text = "Product\nRs. 999\nRs. 1,999-50%\nQuantity\nDelivery Options"
         self.assertEqual(discounted_compare_price(text, 999), 1999)

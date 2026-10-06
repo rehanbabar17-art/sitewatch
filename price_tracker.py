@@ -156,6 +156,38 @@ def availability_line(in_stock: int) -> str:
     return f"\nAvailability: {stock_label(in_stock)}"
 
 
+def upcoming_sale_price(text: str) -> int | None:
+    """Extract a future Daraz campaign price without changing the live price."""
+    lines = [re.sub(r"\s+", " ", line).strip() for line in (text or "").splitlines()]
+    for index, line in enumerate(lines):
+        if not re.search(r"\bsale(?=\s*(?:Rs\.?|PKR))", line, re.I):
+            continue
+        match = re.search(r"(?:Rs\.?|PKR)\s*([0-9][0-9,]*(?:\.\d{1,2})?)", line, re.I)
+        if not match:
+            continue
+        following = " ".join(lines[index + 1:index + 3])
+        if re.search(r"\b(?:starts?|start)\s+in\b", following, re.I):
+            return _price(match.group(1))
+    return None
+
+
+def current_price_after_upcoming_sale(text: str, future_price: int | None) -> int | None:
+    """Read the live price shown after Daraz's future-sale countdown."""
+    if future_price is None:
+        return None
+    lines = [re.sub(r"\s+", " ", line).strip() for line in (text or "").splitlines()]
+    for index, line in enumerate(lines):
+        if not re.search(r"\bstarts?\s+in\b", line, re.I):
+            continue
+        for candidate in lines[index + 1:index + 4]:
+            match = re.search(r"(?:Rs\.?|PKR)\s*([0-9][0-9,]*(?:\.\d{1,2})?)", candidate, re.I)
+            if match:
+                value = _price(match.group(1))
+                if value is not None and value != future_price:
+                    return value
+    return None
+
+
 def discounted_compare_price(text: str, selling_price: int | None) -> int | None:
     """Read a crossed-out/list price from compact sale lines such as Rs. 1,999-50%."""
     if selling_price is None:
@@ -405,6 +437,11 @@ async def fetch_product(page, product: dict) -> dict:
     except Exception:
         pass
     product_text = _normalise_stock_context(body)
+    future_sale_price = upcoming_sale_price(product_text)
+    visible_current_price = current_price_after_upcoming_sale(product_text, future_sale_price)
+    if visible_current_price is not None:
+        price = visible_current_price
+        price_source = "rendered-text"
     availability = structured_availability or ""
     if not availability:
         availability_matches = re.findall(r"https?://schema\.org/(?:InStock|OutOfStock|LimitedAvailability)", html_text, re.I)
@@ -422,6 +459,7 @@ async def fetch_product(page, product: dict) -> dict:
         "name_source": title_source,
         "price": price,
         "compare_at_price": compare_at,
+        "upcoming_sale_price": future_sale_price,
         "price_source": price_source,
         "in_stock": in_stock,
         "valid": price is not None,
@@ -536,6 +574,7 @@ def _update_product_metadata(product, data, timestamp):
     elif price is not None:
         product["compare_at_price"] = None
         product["sale_price"] = None
+    product["upcoming_sale_price"] = data.get("upcoming_sale_price")
     in_stock = data.get("in_stock", -1)
     if in_stock in (0, 1):
         if product.get("in_stock") != in_stock:
@@ -644,6 +683,7 @@ async def main():
             baseline = _price(product.get("baseline_price"))
             last_price = _price(last_reliable.get("price")) if last_reliable else baseline
             last_stock = read_stock(last_reliable or {}, default=-1)
+            last_upcoming_sale = _price(last_reliable.get("upcoming_sale_price")) if last_reliable else None
 
             corrections = _update_product_metadata(product, data, timestamp)
             if audit_due and corrections:
@@ -669,13 +709,28 @@ async def main():
                 product["baseline_price"] = price
                 last_price = price
 
+            future_sale_price = data.get("upcoming_sale_price")
+            if future_sale_price is not None and last_reliable and future_sale_price != last_upcoming_sale:
+                events.append(f"Upcoming sale price: Rs. {future_sale_price:,}")
+                notify(
+                    f"🔮 Upcoming sale - {product_name}",
+                    f"{product_name}\n🔮 Upcoming sale price: Rs. {future_sale_price:,}\nCurrent price: {fmt_price(price)}{availability_line(in_stock)}",
+                    "crystal_ball,shopping_bags",
+                    product_url=product.get("url"),
+                )
+
             if price != last_price:
                 direction = "dropped" if price < last_price else "increased"
                 events.append(f"Price {direction}: Rs. {last_price:,} to Rs. {price:,}")
+                upcoming_line = (
+                    f"\n🔮 Upcoming sale price: Rs. {data['upcoming_sale_price']:,}"
+                    if data.get("upcoming_sale_price") is not None
+                    else ""
+                )
                 sale_line = f"\nSale/list price: Rs. {compare_at:,}" if compare_at and compare_at > price else ""
                 notify(
                     f"Sitewatch: Price change - {product_name}",
-                    f"{product_name}\nRs. {last_price:,} -> Rs. {price:,}{sale_line}{availability_line(in_stock)}",
+                    f"{product_name}\nRs. {last_price:,} -> Rs. {price:,}{sale_line}{upcoming_line}{availability_line(in_stock)}",
                     "pricechart,warning",
                     product_url=product.get("url"),
                 )
@@ -701,9 +756,14 @@ async def main():
             seen_prices = [value for value in seen_prices if value is not None]
             if seen_prices and price < min(seen_prices):
                 events.append(f"ALL-TIME LOW: Rs. {price:,} (prev low Rs. {min(seen_prices):,})")
+                upcoming_line = (
+                    f"\n🔮 Upcoming sale price: Rs. {data['upcoming_sale_price']:,}"
+                    if data.get("upcoming_sale_price") is not None
+                    else ""
+                )
                 notify(
                     f"Sitewatch: ALL-TIME LOW - {product_name}",
-                    f"{product_name}\nNew lowest price: Rs. {price:,}\nPrevious low: Rs. {min(seen_prices):,}{availability_line(in_stock)}",
+                    f"{product_name}\nNew lowest price: Rs. {price:,}\nPrevious low: Rs. {min(seen_prices):,}{upcoming_line}{availability_line(in_stock)}",
                     "chart_with_downwards_trend,partying_face",
                     product_url=product.get("url"),
                 )
@@ -724,6 +784,7 @@ async def main():
                 "timestamp": timestamp,
                 "price": price,
                 "compare_at_price": compare_at or "",
+                "upcoming_sale_price": data.get("upcoming_sale_price") or "",
                 "in_stock": in_stock,
                 "event": event.rstrip(";"),
             })
