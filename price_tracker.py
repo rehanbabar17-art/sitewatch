@@ -633,6 +633,24 @@ async def _fetch_data(page, product):
     if product.get("shopify") or page_data.get("shopify_detected") or product.get("discovered_from_url"):
         api_data = fetch_shopify_api(product)
         if api_data.get("valid"):
+            api_price = api_data.get("price")
+            page_price = page_data.get("price")
+            baseline = _price(product.get("baseline_price"))
+            # A transient/malformed Shopify response must not become a false
+            # all-time low when the rendered product page has a normal price.
+            # Prefer the rendered price only when it is a plausible continuation
+            # of the tracked price and the API value is a severe outlier.
+            if (
+                api_price is not None
+                and page_price is not None
+                and api_price < page_price * 0.5
+                and baseline is not None
+                and price_is_plausible(page_price, baseline, page_data.get("compare_at_price"))
+            ):
+                api_data["price"] = page_price
+                if page_data.get("compare_at_price") is not None:
+                    api_data["compare_at_price"] = page_data["compare_at_price"]
+                api_data["price_source"] = "rendered-text-cross-check"
             # Shopify's product JSON is authoritative for title and prices.
             # Availability falls back to the rendered product form/page, never a cart mutation.
             api_data["in_stock"] = api_data.get("in_stock") if api_data.get("in_stock") is not None else page_data.get("in_stock", -1)
