@@ -708,6 +708,16 @@ async def main():
             price = data.get("price")
             compare_at = data.get("compare_at_price")
             in_stock = data.get("in_stock", -1)
+            baseline = _price(product.get("baseline_price"))
+            rejected_price = None
+            if price is not None and baseline is not None and not price_is_plausible(price, baseline, compare_at):
+                rejected_price = price
+                print(f"  ⚠ Rejected implausible price Rs. {price:,} against tracked baseline Rs. {baseline:,}")
+                data = dict(data)
+                data["price"] = None
+                data["compare_at_price"] = None
+                data["valid"] = False
+                price = None
             valid = bool(data.get("valid")) and price is not None
             product_name = product.get("name") or f"Item #{index}"
             print(f"  • Item #{index}: Checked · {stock_label(in_stock)}")
@@ -716,7 +726,6 @@ async def main():
             product["history_file"] = history_file
             history = load_history(history_file)
             last_reliable = next((row for row in reversed(history) if str(row.get("price", "")).strip()), None)
-            baseline = _price(product.get("baseline_price"))
             last_price = _price(last_reliable.get("price")) if last_reliable else baseline
             last_stock = read_stock(last_reliable or {}, default=-1)
             last_upcoming_sale = _price(last_reliable.get("upcoming_sale_price")) if last_reliable else None
@@ -732,7 +741,7 @@ async def main():
                     "price": "",
                     "compare_at_price": "",
                     "in_stock": in_stock,
-                    "event": "unreliable",
+                    "event": "rejected_price" if rejected_price is not None else "unreliable",
                 })
                 save_history(history_file, history)
                 summary_lines.append(f"- ⚠️ **Item #{index}** — unreliable price read; availability: {stock_label(in_stock)}")

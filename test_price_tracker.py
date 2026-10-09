@@ -97,6 +97,7 @@ class ProductInputTests(unittest.TestCase):
 class SalePriceTests(unittest.TestCase):
     def test_extreme_shopify_outlier_is_not_plausible_against_tracked_price(self):
         self.assertFalse(price_is_plausible(103, 23600, None))
+        self.assertFalse(price_is_plausible(96, 22000, 12000))
 
     def test_daraz_upcoming_sale_price_is_separate_from_current_price(self):
         text = "SaleRs. 664\nStarts in 2 day(s) 21:06:31\nRs. 944\nRs. 949-0.5%"
