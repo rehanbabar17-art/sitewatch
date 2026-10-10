@@ -781,6 +781,7 @@ async def main():
 
             if price != last_price:
                 direction = "dropped" if price < last_price else "increased"
+                direction_emoji = "📉" if price < last_price else "📈"
                 events.append(f"Price {direction}: Rs. {last_price:,} to Rs. {price:,}")
                 upcoming_line = (
                     f"\n🔮 Upcoming sale price: Rs. {data['upcoming_sale_price']:,}"
@@ -790,8 +791,8 @@ async def main():
                 )
                 sale_line = f"\nSale/list price: Rs. {compare_at:,}" if compare_at and compare_at > price else ""
                 notify(
-                    f"Sitewatch: Price change - {product_name}",
-                    f"{product_name}\nRs. {last_price:,} -> Rs. {price:,}{sale_line}{upcoming_line}{availability_line(in_stock)}",
+                    f"{direction_emoji} Sitewatch: Price {direction} - {product_name}",
+                    f"{direction_emoji} {product_name}\nRs. {last_price:,} -> Rs. {price:,}{sale_line}{upcoming_line}{availability_line(in_stock)}",
                     "pricechart,warning",
                     product_url=product.get("url"),
                 )
@@ -799,16 +800,16 @@ async def main():
             if in_stock == 1 and last_stock == 0:
                 events.append("Back in stock")
                 notify(
-                    f"Sitewatch: Restocked - {product_name}",
-                    f"{product_name} is back in stock!\nCurrent price: {fmt_price(price)}",
+                    f"✅ Sitewatch: Restocked - {product_name}",
+                    f"✅ {product_name} is back in stock!\nCurrent price: {fmt_price(price)}",
                     "white_check_mark,shopping_cart",
                     product_url=product.get("url"),
                 )
             elif in_stock == 0 and last_stock == 1:
                 events.append("Out of stock")
                 notify(
-                    f"Sitewatch: Out of stock - {product_name}",
-                    f"{product_name} is no longer available. Current price: {fmt_price(price)}",
+                    f"🚨 Sitewatch: Out of stock - {product_name}",
+                    f"🚨 {product_name} is no longer available. Current price: {fmt_price(price)}",
                     "warning",
                     product_url=product.get("url"),
                 )
@@ -824,8 +825,8 @@ async def main():
                     else ""
                 )
                 notify(
-                    f"Sitewatch: ALL-TIME LOW - {product_name}",
-                    f"{product_name}\nNew lowest price: Rs. {price:,}\nPrevious low: Rs. {min(seen_prices):,}{upcoming_line}{availability_line(in_stock)}",
+                    f"🏆📉 Sitewatch: ALL-TIME LOW - {product_name}",
+                    f"🏆📉 {product_name}\nNew lowest price: Rs. {price:,}\nPrevious low: Rs. {min(seen_prices):,}{upcoming_line}{availability_line(in_stock)}",
                     "chart_with_downwards_trend,partying_face",
                     product_url=product.get("url"),
                 )
